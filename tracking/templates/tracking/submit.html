@@ -1,0 +1,345 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Tracking Number</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <style>
+    :root{
+      --bg: #0f172a; --card: #111827cc; --text: #e5e7eb; --muted: #94a3b8;
+      --accent: #22d3ee; --accent-2:#38bdf8; --ok:#10b98120; --warn:#f59e0b20; --err:#ef444420;
+      --radius: 18px; --shadow: 0 25px 50px -12px rgba(0,0,0,.45);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 600px at 10% 10%, #1e293b 0, transparent 60%),
+        radial-gradient(1000px 500px at 90% 0%, #0ea5e9 0, transparent 40%),
+        radial-gradient(1000px 600px at 50% 100%, #06b6d4 0, transparent 40%),
+        #0f172a;
+      display:grid; place-items:center; padding: 24px;
+    }
+    .card{
+      width:min(560px, 92vw);
+      background: linear-gradient(180deg, #0b1220 0%, #0b1220cc 40%, #0b122099 100%);
+      backdrop-filter: blur(8px);
+      border: 1px solid #1f2a44; border-radius: var(--radius); box-shadow: var(--shadow);
+      padding: 28px; position: relative; overflow: hidden;
+    }
+    .card::after{
+      content:""; position:absolute; inset:-2px;
+      background: radial-gradient(600px 200px at 20% -10%, #22d3ee22 0, transparent 60%),
+                  radial-gradient(600px 200px at 80% 110%, #38bdf822 0, transparent 60%);
+      pointer-events:none; border-radius: inherit;
+    }
+    h1{ margin:0 0 8px; font-size: clamp(20px, 2.4vw, 28px); font-weight: 700; letter-spacing:.2px; }
+    .sub{ margin:0 0 18px; color: var(--muted); font-size: 14px; }
+
+    .msgs{margin:0 0 14px}
+    .msg{ padding: 10px 12px; border-radius: 12px; border:1px solid #1f2a44; margin: 8px 0; font-size: 14px; }
+    .ok{ background: var(--ok); } .warn{ background: var(--warn); } .err{ background: var(--err); }
+
+    form{ display:grid; gap:12px; }
+    .field{ position: relative; }
+    input[type="text"]{
+      width:100%; padding: 14px 14px 14px 44px; border-radius: 14px; border: 1px solid #253254;
+      background: #0b1220; color: var(--text); outline: none; transition: border .2s, box-shadow .2s;
+      font-size: 16px; text-transform: uppercase;  /* show uppercase in UI */
+    }
+    input[type="text"]:focus{ border-color: #22d3ee; box-shadow: 0 0 0 6px #22d3ee22; }
+    .icon{ position: absolute; left: 12px; top: 50%; translate: 0 -50%; width: 22px; height: 22px; opacity:.8; }
+    .row{ display:flex; gap:10px; flex-wrap: wrap; }
+    button{
+      -webkit-tap-highlight-color: transparent; appearance:none; border:0; cursor:pointer;
+      padding: 12px 16px; border-radius: 12px; font-weight:600; font-size: 15px;
+      transition: transform .04s ease, box-shadow .2s ease, background .2s ease;
+    }
+    .btn-primary{ background: linear-gradient(180deg, var(--accent), var(--accent-2)); color:#001018; box-shadow: 0 10px 24px -12px #22d3ee80; }
+    .btn-primary:active{ transform: translateY(1px); }
+    .btn-ghost{ background: #0b1220; color: var(--text); border:1px solid #253254; }
+    .btn-ghost:hover{ border-color:#2c3a61; }
+    .hint{ color:var(--muted); font-size: 13px; margin-top: 4px; }
+
+    #qr-wrapper, #barcode-wrapper{
+      margin-top: 10px; padding: 10px; border:1px dashed #2a3a60; border-radius: 14px; background: #0b1220;
+    }
+    #qr-reader, #barcode-reader{ width: 100%; max-width: 520px; margin:auto; border-radius: 12px; overflow:hidden; }
+
+    .footer{ margin-top:14px; display:flex; justify-content:space-between; align-items:center; gap:10px; color: var(--muted); font-size: 12px; }
+
+    @media (prefers-color-scheme: light){
+      :root{ --bg:#ecfeff; --text:#0b1220; --card:#ffffffcc; --muted:#475569; }
+      body{ background: radial-gradient(1000px 500px at 80% -10%, #bae6fd 0, transparent 55%),
+                      radial-gradient(1000px 500px at 0% 110%, #a7f3d0 0, transparent 55%), #eef2ff; }
+      .card{ background:#fffffff2; border-color:#e5e7eb; }
+      input[type="text"]{ background:#fff; border-color:#e5e7eb; }
+      .btn-ghost{ background:#fff; border-color:#e5e7eb; }
+      #qr-wrapper, #barcode-wrapper{ background:#fff; border-color:#e5e7eb; }
+    }
+  </style>
+</head>
+<body>
+  <main class="card" role="main" aria-labelledby="title">
+    <h1 id="title">Tracking Number</h1>
+    <p class="sub">Type or scan. <strong>Spaces/symbols are removed automatically;</strong> letters and numbers are kept. Press <strong>Enter</strong> to submit.</p>
+
+    <div class="msgs">
+      {% for m in messages %}
+        <div class="msg {% if m.tags == 'success' %}ok{% elif m.tags == 'warning' %}warn{% else %}err{% endif %}">{{ m }}</div>
+      {% endfor %}
+    </div>
+
+    <form method="post" id="tracking-form">
+      {% csrf_token %}
+      <div class="field">
+        <span class="icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M4 7h2v10H4V7Zm3 0h3v10H7V7Zm4 0h2v10h-2V7Zm3 0h3v10h-3V7Zm4 0h2v10h-2V7Z"/></svg>
+        </span>
+        {{ form.tracking }}
+      </div>
+
+      <div class="row">
+        <button class="btn-primary" type="submit">Send</button>
+        <button class="btn-ghost" type="button" id="scan-btn">Scan QR</button>
+        <button class="btn-ghost" type="button" id="scan-barcode-btn">Scan Barcode</button>
+        <span id="scan-status" class="hint"></span>
+      </div>
+
+      <div id="qr-wrapper" style="display:none">
+        <div id="qr-reader"></div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn-ghost" type="button" id="stop-scan">Stop</button>
+          <span class="hint">Use HTTPS (or localhost) for camera access.</span>
+        </div>
+      </div>
+
+      <div id="barcode-wrapper" style="display:none">
+        <div id="barcode-reader"></div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn-ghost" type="button" id="stop-barcode">Stop</button>
+          <span class="hint">Point at the barcode (Code128/Code39). HTTPS or localhost required.</span>
+        </div>
+      </div>
+
+      <p class="hint">Tip: USB/Bluetooth scanners that act like a keyboard work automatically—just focus the field and scan.</p>
+    </form>
+
+    <div class="footer">
+      <span class="hint">Need to keep dashes (—) too? I can allow that.</span>
+      <span class="hint" id="version">v1.3</span>
+    </div>
+  </main>
+
+  <!-- QR scanner library -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <!-- Barcode scanner -->
+  <script src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
+
+  <script>
+    const input = document.getElementById("id_tracking");
+    const form  = document.getElementById("tracking-form");
+
+    // Buttons & wrappers
+    const scanBtn       = document.getElementById("scan-btn");
+    const stopBtn       = document.getElementById("stop-scan");
+    const qrWrap        = document.getElementById("qr-wrapper");
+    const scanStatus    = document.getElementById("scan-status");
+
+    const barcodeBtn    = document.getElementById("scan-barcode-btn");
+    const barcodeWrap   = document.getElementById("barcode-wrapper");
+    const stopBarcode   = document.getElementById("stop-barcode");
+
+    // --- Normalizer: keep A-Z and 0-9, uppercase; remove spaces & symbols
+    const normalize = (v) => (v || "").toUpperCase().replace(/[^A-Z0-9]/g, "").trim();
+
+    // --- Tracking extractor (UPS/FedEx/DHL/USPS + smart fallback)
+    function extractTracking(text) {
+      if (!text) return null;
+      const t = normalize(text);
+
+      // UPS: 1Z + 16 alphanumerics
+      const mUPS = t.match(/1Z[0-9A-Z]{16}/);
+      if (mUPS) return mUPS[0];
+
+      // DHL: 10 digits (classic), or JD + 18 alphanumerics
+      const mDHLjd = t.match(/JD[0-9A-Z]{18}/);
+      if (mDHLjd) return mDHLjd[0];
+      const mDHL10 = t.match(/\b\d{10}\b/);
+      if (mDHL10) return mDHL10[0];
+
+      // FedEx: 12, 15, 20, or 22 digits
+      const mFedEx = t.match(/\d{12}|\d{15}|\d{20}|\d{22}/);
+      if (mFedEx) return mFedEx[0];
+
+      // USPS: 20–22 digits (generic catch)
+      const mUSPS = t.match(/\d{20,22}/);
+      if (mUSPS) return mUSPS[0];
+
+      // Fallback: longest A-Z0-9 block between 8 and 34 chars
+      const blocks = t.match(/[A-Z0-9]{8,34}/g) || [];
+      if (!blocks.length) return null;
+      return blocks.sort((a,b)=>b.length-a.length)[0];
+    }
+
+    // --- Simple stabilizer (require same value twice)
+    let lastCandidate = null;
+    let stableCount = 0;
+    function acceptWhenStable(candidate, onAccept) {
+      if (!candidate) return;
+      if (candidate === lastCandidate) stableCount += 1;
+      else { lastCandidate = candidate; stableCount = 1; }
+      if (stableCount >= 2) { lastCandidate = null; stableCount = 0; onAccept(candidate); }
+    }
+
+    // Keep normalized as the user types; Enter submits
+    input.addEventListener("input", () => {
+      const before = input.value;
+      const after  = normalize(before);
+      if (before !== after) input.value = after;
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (!input.value) return;
+        form.submit();
+      }
+    });
+
+    // -------- QR (html5-qrcode) --------
+    let html5Qrcode;
+
+    async function startScan() {
+      try {
+        await stopBarcodeScan(); // stop barcode to avoid conflict
+        scanStatus.textContent = "Starting camera…";
+        qrWrap.style.display = "block";
+
+        html5Qrcode = html5Qrcode || new Html5Qrcode("qr-reader");
+        const devices = await Html5Qrcode.getCameras();
+        const backCam = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[0];
+
+        await html5Qrcode.start(
+          backCam?.id ?? { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 280, height: 280 } },
+          onScanSuccess,
+          onScanFailure
+        );
+        scanStatus.textContent = "Scanning…";
+      } catch (err) {
+        scanStatus.textContent = "Camera error. Check permissions/HTTPS.";
+        console.error(err);
+      }
+    }
+
+    async function stopScan() {
+      try {
+        if (html5Qrcode && html5Qrcode.isScanning) await html5Qrcode.stop();
+      } finally {
+        scanStatus.textContent = "";
+        qrWrap.style.display = "none";
+      }
+    }
+
+    function onScanSuccess(decodedText) {
+      const candidate = extractTracking(decodedText);
+      acceptWhenStable(candidate, (finalCode) => {
+        input.value = finalCode;
+        stopScan().then(() => form.submit()); // remove .then(...) for manual submit
+      });
+    }
+    function onScanFailure(_) { /* ignore noisy callbacks */ }
+
+    scanBtn.addEventListener("click", startScan);
+    stopBtn?.addEventListener("click", stopScan);
+
+    // -------- BARCODE (QuaggaJS) --------
+    let quaggaRunning = false;
+
+    async function startBarcodeScan() {
+      try {
+        await stopScan(); // stop QR if running
+        barcodeWrap.style.display = "block";
+
+        const constraints = {
+          width: { min: 640 }, height: { min: 480 }, aspectRatio: { min: 1, max: 2 }, facingMode: "environment"
+        };
+
+        Quagga.init({
+          inputStream: { type: "LiveStream", target: document.querySelector("#barcode-reader"), constraints },
+          locator: { patchSize: "medium", halfSample: true },
+          numOfWorkers: navigator.hardwareConcurrency ? Math.min(4, navigator.hardwareConcurrency) : 2,
+          frequency: 10,
+          decoder: {
+            // Allow letters: Code128 (full ASCII) + Code39 (alphanumeric)
+            readers: ["code_128_reader", "code_39_reader"]
+          },
+          locate: true
+        }, (err) => {
+          if (err) {
+            console.error(err);
+            scanStatus.textContent = "Camera error. Check permissions/HTTPS.";
+            stopBarcodeScan();
+            return;
+          }
+          Quagga.start();
+          quaggaRunning = true;
+          scanStatus.textContent = "Scanning barcode…";
+        });
+
+        Quagga.onDetected(onBarcodeDetected);
+      } catch (e) {
+        console.error(e);
+        scanStatus.textContent = "Unable to start barcode scan.";
+        stopBarcodeScan();
+      }
+    }
+
+    function onBarcodeDetected(result) {
+      const raw = result && result.codeResult && result.codeResult.code;
+      const confidence = result && result.codeResult && result.codeResult.decodedCodes
+        ? avgConfidence(result.codeResult.decodedCodes) : 0;
+
+      if (!raw) return;
+      if (confidence < 0.25) return; // adjust if needed
+
+      const candidate = extractTracking(raw);
+      acceptWhenStable(candidate, (finalCode) => {
+        input.value = finalCode;
+        stopBarcodeScan().then(() => form.submit()); // remove .then(...) for manual submit
+      });
+    }
+
+    function avgConfidence(decodedCodes) {
+      const probs = decodedCodes
+        .map(c => (typeof c.error !== "undefined" ? (1 - c.error) : 0))
+        .filter(n => !isNaN(n) && isFinite(n));
+      if (!probs.length) return 0;
+      return probs.reduce((a,b)=>a+b,0) / probs.length;
+    }
+
+    async function stopBarcodeScan() {
+      try {
+        if (quaggaRunning) {
+          Quagga.offDetected(onBarcodeDetected);
+          Quagga.stop();
+        }
+      } finally {
+        quaggaRunning = false;
+        barcodeWrap.style.display = "none";
+        if (!qrWrap || qrWrap.style.display === "none") scanStatus.textContent = "";
+      }
+    }
+
+    barcodeBtn?.addEventListener("click", startBarcodeScan);
+    stopBarcode?.addEventListener("click", stopBarcodeScan);
+
+    // Autofocus for keyboard-wedge scanners
+    window.addEventListener("load", () => input?.focus());
+  </script>
+</body>
+</html>

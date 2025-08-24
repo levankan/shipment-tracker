@@ -43,6 +43,7 @@ INSTALLED_APPS = [
 #ჩემი დამატებული
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "tracking:submit"
+LOGOUT_REDIRECT_URL = "login"
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.yourhost.com"
 EMAIL_PORT = 587
@@ -50,6 +51,23 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = "no-reply@yourdomain.com"
 EMAIL_HOST_PASSWORD = "your-password"
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+
+
+
+# 30 minutes (in seconds)
+SESSION_COOKIE_AGE = 1800
+
+# If True, every request resets the 30‑min timer (sliding/inactivity timeout).
+# If you want a HARD 30‑minute absolute session, set this to False.
+SESSION_SAVE_EVERY_REQUEST = True
+
+# Optional (good defaults for dev)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+
+
+
 
 
 MIDDLEWARE = [

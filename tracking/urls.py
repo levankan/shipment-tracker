@@ -1,8 +1,8 @@
 from django.urls import path
-from .views import submit_tracking
+from . import views
 
 app_name = "tracking"
 
 urlpatterns = [
-    path("", submit_tracking, name="submit"),
+    path("", views.submit_tracking, name="submit"),  # home page
 ]

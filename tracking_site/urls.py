@@ -13,6 +13,7 @@ Class-based views
 Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
+
 """
 
 from django.contrib import admin
@@ -20,8 +21,18 @@ from django.urls import path, include
 from django.contrib.auth import views as auth_views
 
 urlpatterns = [
-    path("admin/", admin.site.urls),                     # admin-only page (superusers)
-    path("accounts/login/", auth_views.LoginView.as_view(), name="login"),
+    path("admin/", admin.site.urls),
+
+    # Auth (login/logout)
+    path("accounts/login/",  auth_views.LoginView.as_view(),  name="login"),
     path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
-    path("", include("tracking.urls")),                  # tracking page at "/"
+
+    # Password reset URLs
+    path("accounts/password_reset/", auth_views.PasswordResetView.as_view(), name="password_reset"),
+    path("accounts/password_reset/done/", auth_views.PasswordResetDoneView.as_view(), name="password_reset_done"),
+    path("accounts/reset/<uidb64>/<token>/", auth_views.PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
+    path("accounts/reset/done/", auth_views.PasswordResetCompleteView.as_view(), name="password_reset_complete"),
+
+    # App routes
+    path("", include(("tracking.urls", "tracking"), namespace="tracking")),
 ]

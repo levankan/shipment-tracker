@@ -40,6 +40,9 @@
     h1{ margin:0 0 8px; font-size: clamp(20px, 2.4vw, 28px); font-weight: 700; letter-spacing:.2px; }
     .sub{ margin:0 0 18px; color: var(--muted); font-size: 14px; }
 
+    .topbar{display:flex;justify-content:space-between;align-items:center;margin:-8px 0 12px 0}
+    .hint{ color:var(--muted); font-size: 13px; margin-top: 4px; }
+
     .msgs{margin:0 0 14px}
     .msg{ padding: 10px 12px; border-radius: 12px; border:1px solid #1f2a44; margin: 8px 0; font-size: 14px; }
     .ok{ background: var(--ok); } .warn{ background: var(--warn); } .err{ background: var(--err); }
@@ -49,7 +52,7 @@
     input[type="text"]{
       width:100%; padding: 14px 14px 14px 44px; border-radius: 14px; border: 1px solid #253254;
       background: #0b1220; color: var(--text); outline: none; transition: border .2s, box-shadow .2s;
-      font-size: 16px; text-transform: uppercase;  /* show uppercase in UI */
+      font-size: 16px; text-transform: uppercase;
     }
     input[type="text"]:focus{ border-color: #22d3ee; box-shadow: 0 0 0 6px #22d3ee22; }
     .icon{ position: absolute; left: 12px; top: 50%; translate: 0 -50%; width: 22px; height: 22px; opacity:.8; }
@@ -63,7 +66,6 @@
     .btn-primary:active{ transform: translateY(1px); }
     .btn-ghost{ background: #0b1220; color: var(--text); border:1px solid #253254; }
     .btn-ghost:hover{ border-color:#2c3a61; }
-    .hint{ color:var(--muted); font-size: 13px; margin-top: 4px; }
 
     #qr-wrapper, #barcode-wrapper{
       margin-top: 10px; padding: 10px; border:1px dashed #2a3a60; border-radius: 14px; background: #0b1220;
@@ -85,6 +87,16 @@
 </head>
 <body>
   <main class="card" role="main" aria-labelledby="title">
+
+    <!-- Top bar (user + Logout) -->
+    <div class="topbar">
+      <div class="hint">Signed in as: <strong>{{ request.user.username }}</strong></div>
+      <form method="post" action="{% url 'logout' %}">
+        {% csrf_token %}
+        <button class="btn-ghost" type="submit" title="Log out now">Log out</button>
+      </form>
+    </div>
+
     <h1 id="title">Tracking Number</h1>
     <p class="sub">Type or scan. <strong>Spaces/symbols are removed automatically;</strong> letters and numbers are kept. Press <strong>Enter</strong> to submit.</p>
 
@@ -131,7 +143,7 @@
 
     <div class="footer">
       <span class="hint">Need to keep dashes (—) too? I can allow that.</span>
-      <span class="hint" id="version">v1.3</span>
+      <span class="hint" id="version">v1.4</span>
     </div>
   </main>
 
@@ -149,7 +161,6 @@
     const stopBtn       = document.getElementById("stop-scan");
     const qrWrap        = document.getElementById("qr-wrapper");
     const scanStatus    = document.getElementById("scan-status");
-
     const barcodeBtn    = document.getElementById("scan-barcode-btn");
     const barcodeWrap   = document.getElementById("barcode-wrapper");
     const stopBarcode   = document.getElementById("stop-barcode");
@@ -212,17 +223,14 @@
 
     // -------- QR (html5-qrcode) --------
     let html5Qrcode;
-
     async function startScan() {
       try {
         await stopBarcodeScan(); // stop barcode to avoid conflict
         scanStatus.textContent = "Starting camera…";
         qrWrap.style.display = "block";
-
         html5Qrcode = html5Qrcode || new Html5Qrcode("qr-reader");
         const devices = await Html5Qrcode.getCameras();
         const backCam = devices.find(d => /back|rear|environment/i.test(d.label)) || devices[0];
-
         await html5Qrcode.start(
           backCam?.id ?? { facingMode: "environment" },
           { fps: 10, qrbox: { width: 280, height: 280 } },
@@ -235,111 +243,96 @@
         console.error(err);
       }
     }
-
     async function stopScan() {
-      try {
-        if (html5Qrcode && html5Qrcode.isScanning) await html5Qrcode.stop();
-      } finally {
-        scanStatus.textContent = "";
-        qrWrap.style.display = "none";
-      }
+      try { if (html5Qrcode && html5Qrcode.isScanning) await html5Qrcode.stop(); }
+      finally { scanStatus.textContent = ""; qrWrap.style.display = "none"; }
     }
-
     function onScanSuccess(decodedText) {
       const candidate = extractTracking(decodedText);
       acceptWhenStable(candidate, (finalCode) => {
         input.value = finalCode;
-        stopScan().then(() => form.submit()); // remove .then(...) for manual submit
+        stopScan().then(() => form.submit());
       });
     }
-    function onScanFailure(_) { /* ignore noisy callbacks */ }
+    function onScanFailure(_) {}
 
     scanBtn.addEventListener("click", startScan);
     stopBtn?.addEventListener("click", stopScan);
 
     // -------- BARCODE (QuaggaJS) --------
     let quaggaRunning = false;
-
     async function startBarcodeScan() {
       try {
         await stopScan(); // stop QR if running
         barcodeWrap.style.display = "block";
-
-        const constraints = {
-          width: { min: 640 }, height: { min: 480 }, aspectRatio: { min: 1, max: 2 }, facingMode: "environment"
-        };
-
+        const constraints = { width:{min:640}, height:{min:480}, aspectRatio:{min:1,max:2}, facingMode:"environment" };
         Quagga.init({
-          inputStream: { type: "LiveStream", target: document.querySelector("#barcode-reader"), constraints },
-          locator: { patchSize: "medium", halfSample: true },
+          inputStream: { type:"LiveStream", target: document.querySelector("#barcode-reader"), constraints },
+          locator: { patchSize:"medium", halfSample:true },
           numOfWorkers: navigator.hardwareConcurrency ? Math.min(4, navigator.hardwareConcurrency) : 2,
           frequency: 10,
-          decoder: {
-            // Allow letters: Code128 (full ASCII) + Code39 (alphanumeric)
-            readers: ["code_128_reader", "code_39_reader"]
-          },
+          decoder: { readers: ["code_128_reader", "code_39_reader"] }, // letters supported
           locate: true
         }, (err) => {
-          if (err) {
-            console.error(err);
-            scanStatus.textContent = "Camera error. Check permissions/HTTPS.";
-            stopBarcodeScan();
-            return;
-          }
-          Quagga.start();
-          quaggaRunning = true;
-          scanStatus.textContent = "Scanning barcode…";
+          if (err) { console.error(err); scanStatus.textContent = "Camera error. Check permissions/HTTPS."; stopBarcodeScan(); return; }
+          Quagga.start(); quaggaRunning = true; scanStatus.textContent = "Scanning barcode…";
         });
-
         Quagga.onDetected(onBarcodeDetected);
       } catch (e) {
-        console.error(e);
-        scanStatus.textContent = "Unable to start barcode scan.";
-        stopBarcodeScan();
+        console.error(e); scanStatus.textContent = "Unable to start barcode scan."; stopBarcodeScan();
       }
     }
-
     function onBarcodeDetected(result) {
-      const raw = result && result.codeResult && result.codeResult.code;
-      const confidence = result && result.codeResult && result.codeResult.decodedCodes
-        ? avgConfidence(result.codeResult.decodedCodes) : 0;
-
-      if (!raw) return;
-      if (confidence < 0.25) return; // adjust if needed
-
+      const raw = result?.codeResult?.code;
+      const confidence = result?.codeResult?.decodedCodes ? avgConfidence(result.codeResult.decodedCodes) : 0;
+      if (!raw || confidence < 0.25) return;
       const candidate = extractTracking(raw);
       acceptWhenStable(candidate, (finalCode) => {
         input.value = finalCode;
-        stopBarcodeScan().then(() => form.submit()); // remove .then(...) for manual submit
+        stopBarcodeScan().then(() => form.submit());
       });
     }
-
     function avgConfidence(decodedCodes) {
-      const probs = decodedCodes
-        .map(c => (typeof c.error !== "undefined" ? (1 - c.error) : 0))
-        .filter(n => !isNaN(n) && isFinite(n));
+      const probs = decodedCodes.map(c => (typeof c.error !== "undefined" ? (1 - c.error) : 0)).filter(n => !isNaN(n) && isFinite(n));
       if (!probs.length) return 0;
       return probs.reduce((a,b)=>a+b,0) / probs.length;
     }
-
     async function stopBarcodeScan() {
-      try {
-        if (quaggaRunning) {
-          Quagga.offDetected(onBarcodeDetected);
-          Quagga.stop();
-        }
-      } finally {
-        quaggaRunning = false;
-        barcodeWrap.style.display = "none";
-        if (!qrWrap || qrWrap.style.display === "none") scanStatus.textContent = "";
-      }
+      try { if (quaggaRunning) { Quagga.offDetected(onBarcodeDetected); Quagga.stop(); } }
+      finally { quaggaRunning = false; barcodeWrap.style.display = "none"; if (!qrWrap || qrWrap.style.display === "none") scanStatus.textContent = ""; }
     }
-
     barcodeBtn?.addEventListener("click", startBarcodeScan);
     stopBarcode?.addEventListener("click", stopBarcodeScan);
 
     // Autofocus for keyboard-wedge scanners
     window.addEventListener("load", () => input?.focus());
+
+    // === Idle logout after 30 minutes (1800s) ===
+    const IDLE_MS = 30 * 60 * 1000;
+    let idleTimer;
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+    function resetIdleTimer() {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(autoLogout, IDLE_MS);
+    }
+    async function autoLogout() {
+      try {
+        await fetch("{% url 'logout' %}", {
+          method: "POST",
+          headers: { "X-CSRFToken": getCookie("csrftoken") || "" },
+        });
+      } finally {
+        window.location.href = "{% url 'login' %}";
+      }
+    }
+    ["click","mousemove","keydown","scroll","touchstart","touchmove"].forEach(evt =>
+      window.addEventListener(evt, resetIdleTimer, { passive: true })
+    );
+    resetIdleTimer();
   </script>
 </body>
 </html>
